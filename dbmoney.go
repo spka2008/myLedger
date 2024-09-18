@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-//	"bufio"
+	"bufio"
 	"encoding/json"
 	"os"
 	"os/exec"
+	"strings"
 	//"github.com/jcmuller/dmenu"
 )
 
@@ -33,7 +34,7 @@ type Transaction struct {
 }
 
 func (r *Record) CollectComment() {
-	r.comment =fmt.Sprintf("|%.2f * %f|%v", r.Price, r.Quantity, r.Name)
+	r.comment =fmt.Sprintf("|%.2f * %.3f|%v", r.Price, r.Quantity, r.Name)
 }
 
 func (r *Record) Format() string {
@@ -45,12 +46,12 @@ func (r *Record) Format() string {
 	return fmt.Sprintf(str, r.account, r.Sum)
 }
 
-func (t *Transaction) CheckSum() bool {
+func (t *Transaction) CheckSum() float64 {
 	var sum float64 = 0.0
 	for _, el := range t.Records {
 		sum += el.Sum
 	}
-	return sum == 0
+	return  t.TotalSum - sum
 }
 
 func (t *Transaction) ToStrings() []string {
@@ -84,10 +85,10 @@ func newTransactionGetJSON(path string, db DB) *Transaction {
 	if err := decoder.Decode(&t); err !=nil {
 		panic(fmt.Sprintf("ERROR Serializ: %v", err))
 	}
-	for _, el := range t.Records {
-		el.CollectComment()
+	for i, _  := range t.Records {
+		t.Records[i].CollectComment()
 	}
-	t.getDiscription()
+	t.getKeyboard()
 	return &t
 }
 
@@ -102,27 +103,63 @@ func  DBInit() DB {
 	return db
 }
 
-func (tr *Transaction) getDiscription() {
-/*	file, err := os.Open(tr.database.Path + "payee.dat")
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-	var payers []string
-	s := bufio.NewScanner(file) 
-	for s.Scan() {
-		payers = append(payers, s.Text())
-	}
-	fmt.Println(payers)
-//	var payer string */
+func (tr *Transaction) getKeyboard() {
 	var flag string
 	fmt.Print("Destination " + tr.Destination + "? y/n ")
 	fmt.Scan(&flag)
 	if flag == "n" {
-		cmd := "cat " + tr.database.Path + "payee.dat | dmenu"
-		out, _ := exec.Command("bash","-c",cmd).Output()
-		tr.Destination = string(out)
+		tr.Destination = findFild("payee", tr.database)
 	}
+	if !isExist(tr.Destination, "payee", tr.database) {
+		appendFild(tr.Destination, "payee", tr.database)
+	}
+	for i, el := range  tr.Records {
+		fmt.Print("Счет для " + el.Name)
+		tr.Records[i].account = findFild("account", tr.database)
+		fmt.Printf("%s\t%.2f\n", tr.Records[i].account,tr.Records[i].Sum)
+	}
+	fmt.Print("Счет для оплаты ")
+	str := findFild("account", tr.database) 
+	fmt.Println(str)
+	if strings.Contains(str, "Наличные") {
+		fmt.Printf("Сумма %.2f  - ", tr.TotalSum)
+		fmt.Scan(&tr.TotalSum)
+		if chS := tr.CheckSum(); chS != 0 {
+			b := Record{account: "Баланс:Корректировка", Sum: chS}
+			tr.Records = append(tr.Records, b)
+		}
+	}
+	r := Record{account: str, Sum: tr.TotalSum * -1}
+	tr.Records = append(tr.Records, r)
+	fmt.Printf("%s\t%f",r.account, r.Sum)
+
 }
 
-	
+func appendFild(fild string, pat string, db DB) {
+	file, _ := os.OpenFile(db.Path + pat + ".dat", os.O_APPEND, 0660)
+	defer file.Close()
+	file.WriteString(pat + " " + fild)
+}
+
+func findFild(pat string, db DB) string {
+	exec.Command("setxkbmap", "-layout", "ru").Run()
+	defer exec.Command("setxkbmap","-layout","us,ru").Run()
+	cmd := "cat " + db.Path + pat +".dat | dmenu -i"
+	out, _ := exec.Command("bash","-c",cmd).Output()
+	return strings.Replace(strings.TrimSpace(string(out)), pat + " ", "", 1)
+}
+
+func isExist(fild string, pat string, db DB) bool {
+	file, err := os.Open(db.Path + pat + ".dat")
+	if err != nil {
+		panic("Ошибка чтения")
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		if scanner.Text() == pat + " " + fild {
+			return true
+		}
+	}
+	return false
+}
