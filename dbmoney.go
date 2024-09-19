@@ -58,7 +58,7 @@ func (t *Transaction) ToStrings() []string {
 	var res []string
 	var status string
 	if t.status {
-		status = "*"
+		status = "* "
 	} else {
 		status = ""
 	}
@@ -89,6 +89,16 @@ func newTransactionGetJSON(path string, db DB) *Transaction {
 		t.Records[i].CollectComment()
 	}
 	t.getKeyboard()
+	strSpl := strings.Split(t.Date, " ")[0]
+	strDate := strings.Split(strSpl, ".")
+	if len(strDate[2]) < 4 {
+		t.Date = "20" + strDate[2]
+	} else {
+		t.Date = strDate[2]
+	}
+	t.Date += "/" + strDate[1] + "/" + strDate[0]
+	t.status = true
+	os.Remove(path)
 	return &t
 }
 
@@ -105,21 +115,22 @@ func  DBInit() DB {
 
 func (tr *Transaction) getKeyboard() {
 	var flag string
+	var prompt string
 	fmt.Print("Destination " + tr.Destination + "? y/n ")
 	fmt.Scan(&flag)
 	if flag == "n" {
-		tr.Destination = findFild("payee", tr.database)
+		tr.Destination = findFild("payee", "Получатель", tr.database)
 	}
 	if !isExist(tr.Destination, "payee", tr.database) {
 		appendFild(tr.Destination, "payee", tr.database)
 	}
 	for i, el := range  tr.Records {
-		fmt.Print("Счет для " + el.Name)
-		tr.Records[i].account = findFild("account", tr.database)
+		prompt = "Счет для " + el.Name
+		tr.Records[i].account = findFild("account", prompt, tr.database)
 		fmt.Printf("%s\t%.2f\n", tr.Records[i].account,tr.Records[i].Sum)
 	}
-	fmt.Print("Счет для оплаты ")
-	str := findFild("account", tr.database) 
+	prompt ="Счет для оплаты "
+	str := findFild("account", prompt, tr.database) 
 	fmt.Println(str)
 	if strings.Contains(str, "Наличные") {
 		fmt.Printf("Сумма %.2f  - ", tr.TotalSum)
@@ -131,20 +142,20 @@ func (tr *Transaction) getKeyboard() {
 	}
 	r := Record{account: str, Sum: tr.TotalSum * -1}
 	tr.Records = append(tr.Records, r)
-	fmt.Printf("%s\t%f",r.account, r.Sum)
+	fmt.Printf("%s\t%.2f\n",r.account, r.Sum)
 
 }
 
 func appendFild(fild string, pat string, db DB) {
-	file, _ := os.OpenFile(db.Path + pat + ".dat", os.O_APPEND, 0660)
+	file, _ := os.OpenFile(db.Path + pat + ".dat", os.O_APPEND|os.O_WRONLY, os.ModeAppend)
 	defer file.Close()
-	file.WriteString(pat + " " + fild)
+	file.WriteString(pat + " " + fild + "\n")
 }
 
-func findFild(pat string, db DB) string {
+func findFild(pat string, prompt string, db DB) string {
 	exec.Command("setxkbmap", "-layout", "ru").Run()
 	defer exec.Command("setxkbmap","-layout","us,ru").Run()
-	cmd := "cat " + db.Path + pat +".dat | dmenu -i"
+	cmd := "cat " + db.Path + pat +".dat | dmenu -i -p '" + prompt + "'"
 	out, _ := exec.Command("bash","-c",cmd).Output()
 	return strings.Replace(strings.TrimSpace(string(out)), pat + " ", "", 1)
 }
@@ -162,4 +173,16 @@ func isExist(fild string, pat string, db DB) bool {
 		}
 	}
 	return false
+}
+
+func (tr *Transaction) SaveTransaction() {
+	path, exist := os.LookupEnv("LEDGER")
+	if !exist {
+		panic("нет пути к журналу")
+	}
+	file, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+	defer file.Close()
+	for _, el := range tr.ToStrings() {
+		file.WriteString(el+"\n")
+	}
 }

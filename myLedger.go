@@ -13,4 +13,5 @@ func main() {
 	for _, el := range tr.ToStrings() {
 		fmt.Println(el)
 	}
+	tr.SaveTransaction()
 }
