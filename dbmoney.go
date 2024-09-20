@@ -108,7 +108,7 @@ func  DBInit() DB {
 	if !exist {
 		panic("нет пути к базе")
 	}
-	db.Path = path
+	db.Path = path + "/"
 	db.Connect = true
 	return db
 }
