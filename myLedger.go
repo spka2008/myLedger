@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	//"io"
 	"os"
-//	"encoding/json"
 )
 
 func main() {
@@ -13,5 +11,10 @@ func main() {
 	for _, el := range tr.ToStrings() {
 		fmt.Println(el)
 	}
-	tr.SaveTransaction()
+	var answer string
+	fmt.Print("Записать?y/n")
+	fmt.Scanln(&answer)
+	if answer == "y" {
+		tr.SaveTransaction()
+	}
 }
