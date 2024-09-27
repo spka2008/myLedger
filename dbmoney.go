@@ -1,46 +1,52 @@
 package main
 
 import (
-	"fmt"
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
-	//"github.com/jcmuller/dmenu"
 )
 
 type DB struct {
-	Path string
-	Connect bool 
+	Path    string
+	Connect bool
 }
 
 type Record struct {
-	account string
-	Sum float64 `json:"sum"`
-	Name string `json:"name"`
+	account  string
+	Sum      float64 `json:"sum"`
+	Name     string  `json:"name"`
 	Quantity float64 `json:"quantity"`
-	Price float64 `json:"price"`
-	comment string
+	Price    float64 `json:"price"`
+	comment  string
 }
 
 type Transaction struct {
-	Date string `json:"date"`
-	status bool
-	Destination string `json:"shopName"`
-	Records []Record `json:"products"`
-	TotalSum float64 `json:"totalSum"`
-	database DB
+	Date        string
+	status      bool
+	Destination string
+	Records     []Record
+	TotalSum    float64
+	database    DB
+}
+
+type Check struct {
+	Date     string   `json:"date"`
+	ShopName string   `json:"shopName"`
+	Products []Record `json:"products"`
+	TotalSum float64  `json:"totalSum"`
 }
 
 func (r *Record) CollectComment() {
-	r.comment =fmt.Sprintf("|%.2f * %.3f|%v", r.Price, r.Quantity, r.Name)
+	r.comment = fmt.Sprintf("|%.2f * %.3f|%v", r.Price, r.Quantity, r.Name)
 }
 
 func (r *Record) Format() string {
 	l := 41 - len(fmt.Sprintf("%.2f", r.Sum))
 	str := "    %-" + fmt.Sprint(l) + "s$%.2f"
-	if (len(r.comment) != 0) {
+	if len(r.comment) != 0 {
 		str += "  ;  " + r.comment
 	}
 	return fmt.Sprintf(str, r.account, r.Sum)
@@ -51,7 +57,7 @@ func (t *Transaction) CheckSum() float64 {
 	for _, el := range t.Records {
 		sum += el.Sum
 	}
-	return  t.TotalSum - sum
+	return t.TotalSum - sum
 }
 
 func (t *Transaction) ToStrings() []string {
@@ -62,7 +68,7 @@ func (t *Transaction) ToStrings() []string {
 	} else {
 		status = ""
 	}
-	res = append(res, t.Date + " " + status + t.Destination)
+	res = append(res, t.Date+" "+status+t.Destination)
 	for i := 0; i < len(t.Records); i++ {
 		res = append(res, t.Records[i].Format())
 	}
@@ -82,10 +88,10 @@ func newTransactionGetJSON(path string, db DB) *Transaction {
 	var t Transaction
 	t.database = db
 	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(&t); err !=nil {
+	if err := decoder.Decode(&t); err != nil {
 		panic(fmt.Sprintf("ERROR Serializ: %v", err))
 	}
-	for i, _  := range t.Records {
+	for i, _ := range t.Records {
 		t.Records[i].CollectComment()
 	}
 	t.getKeyboard()
@@ -102,11 +108,15 @@ func newTransactionGetJSON(path string, db DB) *Transaction {
 	return &t
 }
 
-func  DBInit() DB {
+func DBInit() DB {
 	var db DB
 	path, exist := os.LookupEnv("LEDGERPATH")
 	if !exist {
 		panic("нет пути к базе")
+	}
+	err := exec.Command("bash", "-c", "git -C /home/serg/money push").Run()
+	if err != nil {
+		panic("Проблеммы синхронизации git")
 	}
 	db.Path = path + "/"
 	db.Connect = true
@@ -124,13 +134,13 @@ func (tr *Transaction) getKeyboard() {
 	if !isExist(tr.Destination, "payee", tr.database) {
 		appendFild(tr.Destination, "payee", tr.database)
 	}
-	for i, el := range  tr.Records {
+	for i, el := range tr.Records {
 		prompt = "Счет для " + el.Name
 		tr.Records[i].account = findFild("account", prompt, tr.database)
-		fmt.Printf("%s\t%.2f\n", tr.Records[i].account,tr.Records[i].Sum)
+		fmt.Printf("%s\t%.2f\n", tr.Records[i].account, tr.Records[i].Sum)
 	}
-	prompt ="Счет для оплаты "
-	str := findFild("account", prompt, tr.database) 
+	prompt = "Счет для оплаты "
+	str := findFild("account", prompt, tr.database)
 	fmt.Println(str)
 	if strings.Contains(str, "Наличные") {
 		fmt.Printf("Сумма %.2f  - ", tr.TotalSum)
@@ -142,22 +152,22 @@ func (tr *Transaction) getKeyboard() {
 	}
 	r := Record{account: str, Sum: tr.TotalSum * -1}
 	tr.Records = append(tr.Records, r)
-	fmt.Printf("%s\t%.2f\n",r.account, r.Sum)
+	fmt.Printf("%s\t%.2f\n", r.account, r.Sum)
 
 }
 
 func appendFild(fild string, pat string, db DB) {
-	file, _ := os.OpenFile(db.Path + pat + ".dat", os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+	file, _ := os.OpenFile(db.Path+pat+".dat", os.O_APPEND|os.O_WRONLY, os.ModeAppend)
 	defer file.Close()
 	file.WriteString(pat + " " + fild + "\n")
 }
 
 func findFild(pat string, prompt string, db DB) string {
 	exec.Command("setxkbmap", "-layout", "ru").Run()
-	defer exec.Command("setxkbmap","-layout","us,ru").Run()
-	cmd := "cat " + db.Path + pat +".dat | dmenu -i -p '" + prompt + "'"
-	out, _ := exec.Command("bash","-c",cmd).Output()
-	return strings.Replace(strings.TrimSpace(string(out)), pat + " ", "", 1)
+	defer exec.Command("setxkbmap", "-layout", "us,ru").Run()
+	cmd := "cat " + db.Path + pat + ".dat | dmenu -i -p '" + prompt + "'"
+	out, _ := exec.Command("bash", "-c", cmd).Output()
+	return strings.Replace(strings.TrimSpace(string(out)), pat+" ", "", 1)
 }
 
 func isExist(fild string, pat string, db DB) bool {
@@ -168,7 +178,7 @@ func isExist(fild string, pat string, db DB) bool {
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		if scanner.Text() == pat + " " + fild {
+		if scanner.Text() == pat+" "+fild {
 			return true
 		}
 	}
@@ -183,6 +193,6 @@ func (tr *Transaction) SaveTransaction() {
 	file, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
 	defer file.Close()
 	for _, el := range tr.ToStrings() {
-		file.WriteString(el+"\n")
+		file.WriteString(el + "\n")
 	}
 }
