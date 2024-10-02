@@ -1,3 +1,4 @@
+// Структура данных myLedger
 package main
 
 import (
@@ -9,11 +10,12 @@ import (
 	"strings"
 )
 
-type DB struct {
+type dataBase struct {
 	Path    string
 	Connect bool
 }
 
+// Record Еллемент транзакции
 type Record struct {
 	account  string
 	Sum      float64 `json:"sum"`
@@ -23,15 +25,17 @@ type Record struct {
 	comment  string
 }
 
+// Transaction Элемент базы данных
 type Transaction struct {
 	Date        string
 	status      bool
 	Destination string
 	Records     []Record
 	TotalSum    float64
-	database    DB
+	database    dataBase
 }
 
+// Check Чек
 type Check struct {
 	Date     string   `json:"date"`
 	ShopName string   `json:"shopName"`
@@ -39,11 +43,11 @@ type Check struct {
 	TotalSum float64  `json:"totalSum"`
 }
 
-func (r *Record) CollectComment() {
+func (r *Record) collectComment() {
 	r.comment = fmt.Sprintf("|%.2f * %.3f|%v", r.Price, r.Quantity, r.Name)
 }
 
-func (r *Record) Format() string {
+func (r *Record) format() string {
 	l := 41 - len(fmt.Sprintf("%.2f", r.Sum))
 	str := "    %-" + fmt.Sprint(l) + "s$%.2f"
 	if len(r.comment) != 0 {
@@ -52,15 +56,15 @@ func (r *Record) Format() string {
 	return fmt.Sprintf(str, r.account, r.Sum)
 }
 
-func (t *Transaction) CheckSum() float64 {
-	var sum float64 = 0.0
+func (t *Transaction) checkSum() float64 {
+	var sum float64
 	for _, el := range t.Records {
 		sum += el.Sum
 	}
 	return t.TotalSum - sum
 }
 
-func (t *Transaction) ToStrings() []string {
+func (t *Transaction) toStrings() []string {
 	var res []string
 	var status string
 	if t.status {
@@ -70,12 +74,12 @@ func (t *Transaction) ToStrings() []string {
 	}
 	res = append(res, t.Date+" "+status+t.Destination)
 	for i := 0; i < len(t.Records); i++ {
-		res = append(res, t.Records[i].Format())
+		res = append(res, t.Records[i].format())
 	}
 	return res
 }
 
-func newTransactionGetJSON(path string, db DB) *Transaction {
+func newTransactionGetJSON(path string, db dataBase) *Transaction {
 
 	if !db.Connect {
 		panic("соединение с базой не установлено")
@@ -91,8 +95,8 @@ func newTransactionGetJSON(path string, db DB) *Transaction {
 	if err := decoder.Decode(&t); err != nil {
 		panic(fmt.Sprintf("ERROR Serializ: %v", err))
 	}
-	for i, _ := range t.Records {
-		t.Records[i].CollectComment()
+	for i := range t.Records {
+		t.Records[i].collectComment()
 	}
 	t.getKeyboard()
 	strSpl := strings.Split(t.Date, " ")[0]
@@ -108,8 +112,8 @@ func newTransactionGetJSON(path string, db DB) *Transaction {
 	return &t
 }
 
-func DBInit() DB {
-	var db DB
+func dataBaseConnect() dataBase {
+	var db dataBase
 	path, exist := os.LookupEnv("LEDGERPATH")
 	if !exist {
 		panic("нет пути к базе")
@@ -123,46 +127,46 @@ func DBInit() DB {
 	return db
 }
 
-func (tr *Transaction) getKeyboard() {
+func (t *Transaction) getKeyboard() {
 	var flag string
 	var prompt string
-	fmt.Print("Destination " + tr.Destination + "? y/n ")
+	fmt.Print("Destination " + t.Destination + "? y/n ")
 	fmt.Scan(&flag)
 	if flag == "n" {
-		tr.Destination = findFild("payee", "Получатель", tr.database)
+		t.Destination = findFild("payee", "Получатель", t.database)
 	}
-	if !isExist(tr.Destination, "payee", tr.database) {
-		appendFild(tr.Destination, "payee", tr.database)
+	if !isExist(t.Destination, "payee", t.database) {
+		appendFild(t.Destination, "payee", t.database)
 	}
-	for i, el := range tr.Records {
+	for i, el := range t.Records {
 		prompt = "Счет для " + el.Name
-		tr.Records[i].account = findFild("account", prompt, tr.database)
-		fmt.Printf("%s\t%.2f\n", tr.Records[i].account, tr.Records[i].Sum)
+		t.Records[i].account = findFild("account", prompt, t.database)
+		fmt.Printf("%s\t%.2f\n", t.Records[i].account, t.Records[i].Sum)
 	}
 	prompt = "Счет для оплаты "
-	str := findFild("account", prompt, tr.database)
+	str := findFild("account", prompt, t.database)
 	fmt.Println(str)
 	if strings.Contains(str, "Наличные") {
-		fmt.Printf("Сумма %.2f  - ", tr.TotalSum)
-		fmt.Scan(&tr.TotalSum)
-		if chS := tr.CheckSum(); chS != 0 {
+		fmt.Printf("Сумма %.2f  - ", t.TotalSum)
+		fmt.Scan(&t.TotalSum)
+		if chS := t.checkSum(); chS != 0 {
 			b := Record{account: "Баланс:Корректировка", Sum: chS}
-			tr.Records = append(tr.Records, b)
+			t.Records = append(t.Records, b)
 		}
 	}
-	r := Record{account: str, Sum: tr.TotalSum * -1}
-	tr.Records = append(tr.Records, r)
+	r := Record{account: str, Sum: t.TotalSum * -1}
+	t.Records = append(t.Records, r)
 	fmt.Printf("%s\t%.2f\n", r.account, r.Sum)
 
 }
 
-func appendFild(fild string, pat string, db DB) {
+func appendFild(fild string, pat string, db dataBase) {
 	file, _ := os.OpenFile(db.Path+pat+".dat", os.O_APPEND|os.O_WRONLY, os.ModeAppend)
 	defer file.Close()
 	file.WriteString(pat + " " + fild + "\n")
 }
 
-func findFild(pat string, prompt string, db DB) string {
+func findFild(pat string, prompt string, db dataBase) string {
 	exec.Command("setxkbmap", "-layout", "ru").Run()
 	defer exec.Command("setxkbmap", "-layout", "us,ru").Run()
 	cmd := "cat " + db.Path + pat + ".dat | dmenu -i -p '" + prompt + "'"
@@ -170,7 +174,7 @@ func findFild(pat string, prompt string, db DB) string {
 	return strings.Replace(strings.TrimSpace(string(out)), pat+" ", "", 1)
 }
 
-func isExist(fild string, pat string, db DB) bool {
+func isExist(fild string, pat string, db dataBase) bool {
 	file, err := os.Open(db.Path + pat + ".dat")
 	if err != nil {
 		panic("Ошибка чтения")
@@ -185,14 +189,14 @@ func isExist(fild string, pat string, db DB) bool {
 	return false
 }
 
-func (tr *Transaction) SaveTransaction() {
+func (t *Transaction) saveTransaction() {
 	path, exist := os.LookupEnv("LEDGER")
 	if !exist {
 		panic("нет пути к журналу")
 	}
 	file, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
 	defer file.Close()
-	for _, el := range tr.ToStrings() {
+	for _, el := range t.toStrings() {
 		file.WriteString(el + "\n")
 	}
 }

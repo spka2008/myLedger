@@ -6,15 +6,15 @@ import (
 )
 
 func main() {
-	db := DBInit()
-	tr := newTransactionGetJSON(os.Args[1],db)
-	for _, el := range tr.ToStrings() {
+	db := dataBaseConnect()
+	tr := newTransactionGetJSON(os.Args[1], db)
+	for _, el := range tr.toStrings() {
 		fmt.Println(el)
 	}
 	var answer string
 	fmt.Print("Записать?y/n")
 	fmt.Scanln(&answer)
 	if answer == "y" {
-		tr.SaveTransaction()
+		tr.saveTransaction()
 	}
 }
