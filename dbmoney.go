@@ -17,12 +17,9 @@ type dataBase struct {
 
 // Record Еллемент транзакции
 type Record struct {
-	account  string
-	Sum      float64 `json:"sum"`
-	Name     string  `json:"name"`
-	Quantity float64 `json:"quantity"`
-	Price    float64 `json:"price"`
-	comment  string
+	account string
+	comment string
+	sum     float64
 }
 
 // Transaction Элемент базы данных
@@ -35,31 +32,40 @@ type Transaction struct {
 	database    dataBase
 }
 
+// Product товар
+type Product struct {
+	Sum      float64 `json:"sum"`
+	Name     string  `json:"name"`
+	Quantity float64 `json:"quantity"`
+	Price    float64 `json:"price"`
+}
+
 // Check Чек
 type Check struct {
-	Date     string   `json:"date"`
-	ShopName string   `json:"shopName"`
-	Products []Record `json:"products"`
-	TotalSum float64  `json:"totalSum"`
+	Date     string    `json:"date"`
+	ShopName string    `json:"shopName"`
+	Products []Product `json:"products"`
+	TotalSum float64   `json:"totalSum"`
 }
 
+/*
 func (r *Record) collectComment() {
 	r.comment = fmt.Sprintf("|%.2f * %.3f|%v", r.Price, r.Quantity, r.Name)
-}
+}*/
 
 func (r *Record) format() string {
-	l := 41 - len(fmt.Sprintf("%.2f", r.Sum))
+	l := 41 - len(fmt.Sprintf("%.2f", r.sum))
 	str := "    %-" + fmt.Sprint(l) + "s$%.2f"
 	if len(r.comment) != 0 {
 		str += "  ;  " + r.comment
 	}
-	return fmt.Sprintf(str, r.account, r.Sum)
+	return fmt.Sprintf(str, r.account, r.sum)
 }
 
 func (t *Transaction) checkSum() float64 {
 	var sum float64
 	for _, el := range t.Records {
-		sum += el.Sum
+		sum += el.sum
 	}
 	return t.TotalSum - sum
 }
