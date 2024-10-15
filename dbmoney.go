@@ -48,10 +48,11 @@ type Check struct {
 	TotalSum float64   `json:"totalSum"`
 }
 
-/*
-func (r *Record) collectComment() {
-	r.comment = fmt.Sprintf("|%.2f * %.3f|%v", r.Price, r.Quantity, r.Name)
-}*/
+func (p Product) ProductToRecord() *Record {
+	var r Record
+	r.sum = p.Sum
+	r.comment = fmt.Sprintf("|%.2f * %.3f|%v", p.Price, p.Quantity, p.Name)
+}
 
 func (r *Record) format() string {
 	l := 41 - len(fmt.Sprintf("%.2f", r.sum))
@@ -85,22 +86,27 @@ func (t *Transaction) toStrings() []string {
 	return res
 }
 
-func newTransactionGetJSON(path string, db dataBase) *Transaction {
-
-	if !db.Connect {
-		panic("соединение с базой не установлено")
-	}
+func NewCheck(path string) *Check {
 	file, err := os.Open(path)
 	if err != nil {
 		panic(fmt.Sprintf("file not open %v", err))
 	}
 	defer file.Close()
-	var t Transaction
-	t.database = db
+	var ch Check
 	decoder := json.NewDecoder(file)
 	if err := decoder.Decode(&t); err != nil {
 		panic(fmt.Sprintf("ERROR Serializ: %v", err))
 	}
+	return &ch
+}
+
+func (ch Check) CheckToTransaction(db dataBase) *Transaction {
+
+	if !db.Connect {
+		panic("соединение с базой не установлено")
+	}
+	var t Transaction
+	t.database = db
 	for i := range t.Records {
 		t.Records[i].collectComment()
 	}
