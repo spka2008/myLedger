@@ -3,17 +3,11 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 )
-
-type dataBase struct {
-	Path    string
-	Connect bool
-}
 
 // Record Еллемент транзакции
 type Record struct {
@@ -28,30 +22,13 @@ type Transaction struct {
 	status      bool
 	Destination string
 	Records     []Record
-	TotalSum    float64
-	database    dataBase
-}
-
-// Product товар
-type Product struct {
-	Sum      float64 `json:"sum"`
-	Name     string  `json:"name"`
-	Quantity float64 `json:"quantity"`
-	Price    float64 `json:"price"`
-}
-
-// Check Чек
-type Check struct {
-	Date     string    `json:"date"`
-	ShopName string    `json:"shopName"`
-	Products []Product `json:"products"`
-	TotalSum float64   `json:"totalSum"`
 }
 
 func (p Product) ProductToRecord() *Record {
 	var r Record
 	r.sum = p.Sum
 	r.comment = fmt.Sprintf("|%.2f * %.3f|%v", p.Price, p.Quantity, p.Name)
+	return &r
 }
 
 func (r *Record) format() string {
@@ -63,12 +40,12 @@ func (r *Record) format() string {
 	return fmt.Sprintf(str, r.account, r.sum)
 }
 
-func (t *Transaction) checkSum() float64 {
+func (t *Transaction) Sum() float64 {
 	var sum float64
 	for _, el := range t.Records {
 		sum += el.sum
 	}
-	return t.TotalSum - sum
+	return sum
 }
 
 func (t *Transaction) toStrings() []string {
@@ -86,20 +63,6 @@ func (t *Transaction) toStrings() []string {
 	return res
 }
 
-func NewCheck(path string) *Check {
-	file, err := os.Open(path)
-	if err != nil {
-		panic(fmt.Sprintf("file not open %v", err))
-	}
-	defer file.Close()
-	var ch Check
-	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(&t); err != nil {
-		panic(fmt.Sprintf("ERROR Serializ: %v", err))
-	}
-	return &ch
-}
-
 func (ch Check) CheckToTransaction(db dataBase) *Transaction {
 
 	if !db.Connect {
@@ -107,10 +70,44 @@ func (ch Check) CheckToTransaction(db dataBase) *Transaction {
 	}
 	var t Transaction
 	t.database = db
-	for i := range t.Records {
-		t.Records[i].collectComment()
+	var flag string
+	var prompt string
+	fmt.Print("Destination " + t.Destination + "? y/n ")
+	fmt.Scan(&flag)
+	if flag == "n" {
+		t.Destination = findFild("payee", "Получатель", t.database)
 	}
-	t.getKeyboard()
+	if !isExist(t.Destination, "payee", t.database) {
+		appendFild(t.Destination, "payee", t.database)
+	}
+	for _, el := range ch.Products {
+		for b := true; b; {
+			prompt = "Счет для " + el.Name
+			acc := findFild("account", prompt, t.database)
+			b = false
+			if !isExist(acc, "account", t.database) {
+				fmt.Println("Добавить " + acc + "?y/n")
+				fmt.Scan(&flag)
+				if b = (flag == "n"); !b {
+					appendFild(acc, "account", t.database)
+				}
+			}
+		}
+		t.Records = append(t.Records, *el.ProductToRecord())
+	}
+	prompt = "Счет для оплаты "
+	str := findFild("account", prompt, t.database)
+	fmt.Println(str)
+	if strings.Contains(str, "Наличные") {
+		fmt.Printf("Сумма %.2f  - ", ch.TotalSum)
+		fmt.Scan(&ch.TotalSum)
+		if chS := ch.TotalSum - t.Sum(); chS != 0 {
+			b := Record{account: "Баланс:Корректировка", sum: chS}
+			t.Records = append(t.Records, b)
+		}
+	}
+	b := Record{account: str, sum: ch.TotalSum * -1}
+	t.Records = append(t.Records, b)
 	strSpl := strings.Split(t.Date, " ")[0]
 	strDate := strings.Split(strSpl, ".")
 	if len(strDate[2]) < 4 {
@@ -120,7 +117,6 @@ func (ch Check) CheckToTransaction(db dataBase) *Transaction {
 	}
 	t.Date += "/" + strDate[1] + "/" + strDate[0]
 	t.status = true
-	os.Remove(path)
 	return &t
 }
 
@@ -137,39 +133,6 @@ func dataBaseConnect() dataBase {
 	db.Path = path + "/"
 	db.Connect = true
 	return db
-}
-
-func (t *Transaction) getKeyboard() {
-	var flag string
-	var prompt string
-	fmt.Print("Destination " + t.Destination + "? y/n ")
-	fmt.Scan(&flag)
-	if flag == "n" {
-		t.Destination = findFild("payee", "Получатель", t.database)
-	}
-	if !isExist(t.Destination, "payee", t.database) {
-		appendFild(t.Destination, "payee", t.database)
-	}
-	for i, el := range t.Records {
-		prompt = "Счет для " + el.Name
-		t.Records[i].account = findFild("account", prompt, t.database)
-		fmt.Printf("%s\t%.2f\n", t.Records[i].account, t.Records[i].Sum)
-	}
-	prompt = "Счет для оплаты "
-	str := findFild("account", prompt, t.database)
-	fmt.Println(str)
-	if strings.Contains(str, "Наличные") {
-		fmt.Printf("Сумма %.2f  - ", t.TotalSum)
-		fmt.Scan(&t.TotalSum)
-		if chS := t.checkSum(); chS != 0 {
-			b := Record{account: "Баланс:Корректировка", Sum: chS}
-			t.Records = append(t.Records, b)
-		}
-	}
-	r := Record{account: str, Sum: t.TotalSum * -1}
-	t.Records = append(t.Records, r)
-	fmt.Printf("%s\t%.2f\n", r.account, r.Sum)
-
 }
 
 func appendFild(fild string, pat string, db dataBase) {
