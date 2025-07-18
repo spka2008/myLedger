@@ -3,18 +3,24 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/spka2008/myLedger/db"
+	"github.com/spka2008/myLedger/item"
+	"github.com/spka2008/myLedger/receipt"
 )
 
 func main() {
-	db := dataBaseConnect()
-	tr := newTransactionGetJSON(os.Args[1], db)
-	for _, el := range tr.toStrings() {
-		fmt.Println(el)
+	db := db.DataBaseConnect()
+	receipt := receipt.NewCheck("/home/serg/18.07.25 12.25.44_receipt_share.json") //os.Args[1])
+	answer := "n"
+	var tr *item.Transaction
+	for answer != "y" {
+		tr = item.CheckToTransaction(receipt, db.Path)
+		tr.Print()
+		fmt.Print("Записать?y/n")
+		fmt.Scanln(&answer)
 	}
-	var answer string
-	fmt.Print("Записать?y/n")
-	fmt.Scanln(&answer)
-	if answer == "y" {
-		tr.saveTransaction()
-	}
+	tr.SaveTransaction()
+	os.Remove(os.Args[1])
+
 }

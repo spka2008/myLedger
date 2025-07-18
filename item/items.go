@@ -26,16 +26,19 @@ type Transaction struct {
 	Records     []Record
 }
 
-func ProductToRecord(p receipt.Product) *Record {
+func ProductToRecord(p receipt.Product, acc string) *Record {
 	var r Record
+	r.account = acc
 	r.sum = p.Sum
 	r.comment = fmt.Sprintf("|%.2f * %.3f|%v", p.Price, p.Quantity, p.Name)
 	return &r
 }
 
 func (r *Record) format() string {
-	l := 41 - len(fmt.Sprintf("%.2f", r.sum))
-	str := "    %-" + fmt.Sprint(l) + "s$%.2f"
+	//l := 41 - len(fmt.Sprintf("%.2f", r.sum))
+	l := 48 - len([]rune(r.account))
+	//str := "    %-" + fmt.Sprint(l) + "s$%.2f"
+	str := "    %s%" + fmt.Sprint(l) + ".2f руб"
 	if len(r.comment) != 0 {
 		str += "  ;  " + r.comment
 	}
@@ -70,6 +73,8 @@ func CheckToTransaction(ch receipt.Receipt, db string) *Transaction {
 	var t Transaction
 	var flag string
 	var prompt string
+	t.Date = ch.Date
+	t.Destination = ch.ShopName
 	fmt.Print("Destination " + t.Destination + "? y/n ")
 	fmt.Scan(&flag)
 	if flag == "n" {
@@ -79,9 +84,10 @@ func CheckToTransaction(ch receipt.Receipt, db string) *Transaction {
 		appendFild(t.Destination, "payee", db)
 	}
 	for _, el := range ch.Products {
+		var acc string
 		for b := true; b; {
 			prompt = "Счет для " + el.Name
-			acc := findFild("account", prompt, db)
+			acc = findFild("account", prompt, db)
 			b = false
 			if !isExist(acc, "account", db) {
 				fmt.Println("Добавить " + acc + "?y/n")
@@ -91,11 +97,10 @@ func CheckToTransaction(ch receipt.Receipt, db string) *Transaction {
 				}
 			}
 		}
-		t.Records = append(t.Records, *(ProductToRecord(el)))
+		t.Records = append(t.Records, *(ProductToRecord(el, acc)))
 	}
 	prompt = "Счет для оплаты "
 	str := findFild("account", prompt, db)
-	fmt.Println(str)
 	if strings.Contains(str, "Наличные") {
 		fmt.Printf("Сумма %.2f  - ", ch.TotalSum)
 		fmt.Scan(&ch.TotalSum)
@@ -147,8 +152,8 @@ func isExist(fild string, pat string, db string) bool {
 	return false
 }
 
-func (t *Transaction) saveTransaction() {
-	path, exist := os.LookupEnv("LEDGER")
+func (t *Transaction) SaveTransaction() {
+	path, exist := os.LookupEnv("LEDGER1")
 	if !exist {
 		panic("нет пути к журналу")
 	}
@@ -156,5 +161,11 @@ func (t *Transaction) saveTransaction() {
 	defer file.Close()
 	for _, el := range t.toStrings() {
 		file.WriteString(el + "\n")
+	}
+}
+
+func (t *Transaction) Print() {
+	for _, el := range t.toStrings() {
+		fmt.Println(el)
 	}
 }
