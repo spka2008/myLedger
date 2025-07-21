@@ -153,7 +153,7 @@ func isExist(fild string, pat string, db string) bool {
 }
 
 func (t *Transaction) SaveTransaction() {
-	path, exist := os.LookupEnv("LEDGER1")
+	path, exist := os.LookupEnv("LEDGER")
 	if !exist {
 		panic("нет пути к журналу")
 	}

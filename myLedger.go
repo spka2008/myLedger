@@ -11,7 +11,7 @@ import (
 
 func main() {
 	db := db.DataBaseConnect()
-	receipt := receipt.NewCheck("/home/serg/18.07.25 12.25.44_receipt_share.json") //os.Args[1])
+	receipt := receipt.NewCheck(os.Args[1])
 	answer := "n"
 	var tr *item.Transaction
 	for answer != "y" {
