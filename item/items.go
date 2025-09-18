@@ -36,7 +36,7 @@ func ProductToRecord(p receipt.Product, acc string) *Record {
 
 func (r *Record) format() string {
 	//l := 41 - len(fmt.Sprintf("%.2f", r.sum))
-	l := 48 - len([]rune(r.account))
+	l := 41 - len([]rune(r.account))
 	//str := "    %-" + fmt.Sprint(l) + "s$%.2f"
 	str := "    %s%" + fmt.Sprint(l) + ".2f руб"
 	if len(r.comment) != 0 {
